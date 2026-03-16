@@ -1,0 +1,15 @@
+[submodule "auth_service"]
+	path = auth_service
+	url = https://github.com/KOROCHE19/presence_app-auth_service.git
+
+[submodule "planning_service"]
+	path = planning_service
+	url = https://github.com/KOROCHE19/presence_app-planning_service.git
+
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/KOROCHE19/presence_app-frontend.git
+
+[submodule "emargement_service"]
+	path = emargement_service
+	url = https://github.com/KOROCHE19/presence_app-emargement_service.git
