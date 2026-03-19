@@ -26,7 +26,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     nom = db.Column(db.String(80), nullable=False)
     prenom = db.Column(db.String(80), nullable=False)
-    role = db.Column(db.String(20), default='formateur')  # le role d'admin ou de formateur
+    role = db.Column(db.String(20), default='formateur')  # admin ou formateur
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -155,7 +155,7 @@ if __name__ == '__main__':
         db.create_all()
         # creation d'un admin par defaut si la table est vide
         if not User.query.first():
-            admin = User(email='admin@ecole.fr', nom='Admin', prenom='CNAM', role='admin')
+            admin = User(email='admin@ecole.fr', nom='Admin', prenom='Super', role='admin')
             admin.set_password('admin123')
             db.session.add(admin)
             db.session.commit()

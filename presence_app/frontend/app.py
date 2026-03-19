@@ -547,148 +547,77 @@ def admin_etudiants():
 
     promo_filtre = request.args.get('promotion_id', '')
     etudiants = []
-    msg_import = None
-
     if promo_filtre:
         try:
-            rep = requests.get(PLANNING_URL + '/planning/etudiants?promotion_id=' + promo_filtre, headers=get_headers(), timeout=5)
+            url = PLANNING_URL + '/planning/etudiants?promotion_id=' + promo_filtre
+            rep = requests.get(url, headers=get_headers(), timeout=5)
             etudiants = rep.json().get('etudiants', []) if rep.status_code == 200 else []
         except:
             flash('Erreur chargement étudiants')
 
     if request.method == 'POST':
         action = request.form.get('action')
-        promo_id = request.form.get('promotion_id', '')
-
-        if action == 'ajouter':
-            try:
+        try:
+            if action == 'ajouter':
                 rep = requests.post(PLANNING_URL + '/planning/etudiants', headers=get_headers(), json={
                     'nom': request.form['nom'],
                     'prenom': request.form['prenom'],
                     'email': request.form['email'],
-                    'numero_etudiant': request.form.get('numero_etudiant') or None,
-                    'promotion_id': int(promo_id)
+                    'numero_etudiant': request.form.get('numero_etudiant'),
+                    'promotion_id': int(request.form['promotion_id'])
                 }, timeout=5)
-                if rep.status_code in [200, 201]:
-                    flash_msg = 'Étudiant ajouté ✓'
-                else:
+                if rep.status_code not in [200, 201]:
                     flash(rep.json().get('error', 'Erreur'))
-            except:
-                flash('Erreur serveur')
+        except:
+            flash('Erreur serveur')
+        return redirect('/admin/etudiants?promotion_id=' + request.form.get('promotion_id', ''))
 
-        elif action == 'import_csv':
-            # import via fichier CSV
-            fichier = request.files.get('fichier_csv')
-            if not fichier or fichier.filename == '':
-                flash('Aucun fichier sélectionné')
-            else:
-                try:
-                    rep = requests.post(
-                        PLANNING_URL + '/planning/etudiants/import-csv',
-                        headers=get_headers(),
-                        data={'promotion_id': promo_id},
-                        files={'fichier': (fichier.filename, fichier.stream, 'text/csv')},
-                        timeout=10
-                    )
-                    data = rep.json()
-                    if rep.status_code in [200, 201]:
-                        msg_import = data.get('message', 'Import terminé')
-                        if data.get('erreurs'):
-                            msg_import += ' — ' + str(len(data['erreurs'])) + ' ligne(s) ignorée(s)'
-                    else:
-                        flash(data.get('error', 'Erreur import'))
-                except Exception as e:
-                    flash('Erreur : ' + str(e))
-
-        return redirect('/admin/etudiants?promotion_id=' + promo_id)
-
-    options_promos = "".join([
-        f"<option value='{p['id']}' {'selected' if str(p['id'])==promo_filtre else ''}>"
-        f"{p['nom']} — {p.get('annee','')} ({p.get('nb_etudiants',0)} ét.)</option>"
-        for p in promotions
-    ])
+    options_promos = "".join([f"<option value='{p['id']}' {'selected' if str(p['id'])==promo_filtre else ''}>{p['nom']} — {p.get('annee','')} ({p.get('nb_etudiants',0)} ét.)</option>" for p in promotions])
 
     lignes = "".join([f"""
     <tr>
-        <td>{e.get('numero_etudiant') or '—'}</td>
+        <td>{e.get('numero_etudiant') or '-'}</td>
         <td>{e['prenom']} {e['nom']}</td>
-        <td style="color:#666; font-size:13px;">{e['email']}</td>
+        <td>{e['email']}</td>
     </tr>""" for e in etudiants])
-
-    msg_import_html = f'<div class="alert alert-success">{msg_import}</div>' if msg_import else ''
 
     content = f"""
     <h1 style="font-size:22px; color:#2c3e50; margin-bottom:20px;">Gestion des étudiants</h1>
-
-    {msg_import_html}
-
-    <!-- choix de la promo -->
-    <div class="card" style="padding:15px 25px;">
-        <form method="get" style="display:flex; align-items:center; gap:12px;">
-            <label style="font-weight:bold; white-space:nowrap;">Promotion :</label>
-            <select name="promotion_id" style="flex:1; padding:8px; border:1px solid #ced4da; border-radius:5px; font-size:14px;">
-                <option value="">-- choisir --</option>
-                {options_promos}
-            </select>
-            <button class="btn btn-primary" type="submit">Voir</button>
-        </form>
-    </div>
-
-    {"" if not promo_filtre else f'''
     <div class="grid-2">
-
-        <!-- ajouter un etudiant manuellement -->
-        <div class="card">
-            <h2>Ajouter un étudiant</h2>
-            <form method="post">
-                <input type="hidden" name="action" value="ajouter">
-                <input type="hidden" name="promotion_id" value="{promo_filtre}">
-                <div class="form-group"><label>Nom</label><input name="nom" required></div>
-                <div class="form-group"><label>Prénom</label><input name="prenom" required></div>
-                <div class="form-group"><label>Email</label><input type="email" name="email" required></div>
-                <div class="form-group"><label>N° étudiant <span style="color:#999;font-weight:normal">(optionnel)</span></label>
-                    <input name="numero_etudiant"></div>
-                <button class="btn btn-success" type="submit">Ajouter</button>
-            </form>
-        </div>
-
-        <!-- import CSV -->
-        <div class="card">
-            <h2>Import CSV</h2>
-            <p style="font-size:13px; color:#666; margin-bottom:15px;">
-                Une ligne par étudiant, colonnes séparées par <code>,</code> ou <code>;</code><br>
-                Format : <code>nom, prenom, email, numero_etudiant</code>
-            </p>
-            <div style="background:#f8f9fa; border-radius:5px; padding:12px; font-family:monospace; font-size:12px; margin-bottom:15px; color:#555;">
-                Dupont;Jean;jean.dupont@email.fr;E001<br>
-                Martin;Sophie;sophie.martin@email.fr;E002<br>
-                Bernard;Lucas;lucas.b@email.fr;
+        <div>
+            <div class="card">
+                <h2>Ajouter un étudiant</h2>
+                <form method="post">
+                    <input type="hidden" name="action" value="ajouter">
+                    <div class="form-group"><label>Promotion</label>
+                        <select name="promotion_id" required><option value="">-- choisir --</option>{options_promos}</select>
+                    </div>
+                    <div class="form-group"><label>Nom</label><input name="nom" required></div>
+                    <div class="form-group"><label>Prénom</label><input name="prenom" required></div>
+                    <div class="form-group"><label>Email</label><input type="email" name="email" required></div>
+                    <div class="form-group"><label>N° étudiant</label><input name="numero_etudiant" placeholder="optionnel"></div>
+                    <button class="btn btn-success" type="submit">Ajouter</button>
+                </form>
             </div>
-            <form method="post" enctype="multipart/form-data">
-                <input type="hidden" name="action" value="import_csv">
-                <input type="hidden" name="promotion_id" value="{promo_filtre}">
-                <div class="form-group">
-                    <label>Fichier CSV</label>
-                    <input type="file" name="fichier_csv" accept=".csv,.txt" required
-                           style="padding:6px; border:1px solid #ced4da; border-radius:5px; width:100%;">
-                </div>
-                <button class="btn btn-primary" type="submit">Importer</button>
-            </form>
         </div>
-
-    </div>
-
-    <!-- liste des etudiants -->
-    <div class="card" style="padding:0; overflow:hidden;">
-        <div style="padding:15px 20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-            <strong>{len(etudiants)} étudiant(s) dans cette promotion</strong>
+        <div>
+            <div class="card">
+                <h2>Liste des étudiants</h2>
+                <form method="get" style="margin-bottom:15px; display:flex; gap:10px;">
+                    <select name="promotion_id" style="flex:1; padding:8px; border:1px solid #ced4da; border-radius:5px;">
+                        <option value="">-- choisir une promotion --</option>
+                        {options_promos}
+                    </select>
+                    <button class="btn btn-primary" type="submit">Voir</button>
+                </form>
+                <table>
+                    <thead><tr><th>N°</th><th>Nom</th><th>Email</th></tr></thead>
+                    <tbody>{lignes if lignes else '<tr><td colspan="3" style="text-align:center;padding:20px;color:#999;">Sélectionnez une promotion</td></tr>'}</tbody>
+                </table>
+                <p style="margin-top:10px; font-size:13px; color:#666;">{len(etudiants)} étudiant(s)</p>
+            </div>
         </div>
-        <table>
-            <thead><tr><th>N°</th><th>Nom complet</th><th>Email</th></tr></thead>
-            <tbody>{lignes if lignes else "<tr><td colspan='3' style='text-align:center;padding:25px;color:#999;'>Aucun étudiant dans cette promotion</td></tr>"}</tbody>
-        </table>
     </div>
-    '''}
     """
     return render(content)
 
