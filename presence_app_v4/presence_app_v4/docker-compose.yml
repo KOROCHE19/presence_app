@@ -1,0 +1,118 @@
+services:
+
+  # ── bases de données ────────────────────────────────────────────────────────
+
+  auth_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB:       ${AUTH_DB_NAME}
+      POSTGRES_USER:     ${AUTH_DB_USER}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASS}
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    # AMÉLIORATION 4 : healthcheck — attend que PostgreSQL soit vraiment prêt
+    # depends_on condition: service_healthy attend ce statut avant de démarrer
+    # le service applicatif, évitant les "Connection refused" au boot.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER} -d ${AUTH_DB_NAME}"]
+      interval: 5s
+      timeout:  3s
+      retries:  5
+      start_period: 10s
+
+  planning_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB:       ${PLANNING_DB_NAME}
+      POSTGRES_USER:     ${PLANNING_DB_USER}
+      POSTGRES_PASSWORD: ${PLANNING_DB_PASS}
+    volumes:
+      - planning_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PLANNING_DB_USER} -d ${PLANNING_DB_NAME}"]
+      interval: 5s
+      timeout:  3s
+      retries:  5
+      start_period: 10s
+
+  emarg_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB:       ${EMARG_DB_NAME}
+      POSTGRES_USER:     ${EMARG_DB_USER}
+      POSTGRES_PASSWORD: ${EMARG_DB_PASS}
+    volumes:
+      - emarg_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EMARG_DB_USER} -d ${EMARG_DB_NAME}"]
+      interval: 5s
+      timeout:  3s
+      retries:  5
+      start_period: 10s
+
+  # ── services applicatifs ────────────────────────────────────────────────────
+
+  auth_service:
+    build: ./auth_service
+    environment:
+      DATABASE_URL: postgresql://${AUTH_DB_USER}:${AUTH_DB_PASS}@auth_db:5432/${AUTH_DB_NAME}
+      SECRET_KEY:   ${SECRET_KEY}
+    ports:
+      - "5001:5001"
+    depends_on:
+      auth_db:
+        # AMÉLIORATION 4 : attend service_healthy (PostgreSQL prêt à accepter des connexions)
+        # au lieu de simplement service_started (conteneur démarré)
+        condition: service_healthy
+
+  planning_service:
+    build: ./planning_service
+    environment:
+      DATABASE_URL: postgresql://${PLANNING_DB_USER}:${PLANNING_DB_PASS}@planning_db:5432/${PLANNING_DB_NAME}
+      SECRET_KEY:   ${SECRET_KEY}
+    ports:
+      - "5002:5002"
+    depends_on:
+      planning_db:
+        condition: service_healthy
+
+  emargement_service:
+    build: ./emargement_service
+    environment:
+      DATABASE_URL:         postgresql://${EMARG_DB_USER}:${EMARG_DB_PASS}@emarg_db:5432/${EMARG_DB_NAME}
+      SECRET_KEY:           ${SECRET_KEY}
+      PLANNING_SERVICE_URL: http://planning_service:5002
+      MAIL_SERVER:          ${MAIL_SERVER}
+      MAIL_PORT:            ${MAIL_PORT}
+      MAIL_USERNAME:        ${MAIL_USERNAME}
+      MAIL_PASSWORD:        ${MAIL_PASSWORD}
+      MAIL_SENDER:          ${MAIL_SENDER}
+    ports:
+      - "5003:5003"
+    depends_on:
+      emarg_db:
+        condition: service_healthy
+      planning_service:
+        condition: service_started   # pas de healthcheck sur les services Python ici
+
+  frontend:
+    build: ./frontend
+    environment:
+      SECRET_KEY:           ${SECRET_KEY}
+      AUTH_SERVICE_URL:     http://auth_service:5001
+      PLANNING_SERVICE_URL: http://planning_service:5002
+      EMARG_SERVICE_URL:    http://emargement_service:5003
+    ports:
+      - "5000:5000"
+    depends_on:
+      auth_service:
+        condition: service_started
+      planning_service:
+        condition: service_started
+      emargement_service:
+        condition: service_started
+
+volumes:
+  auth_db_data:
+  planning_db_data:
+  emarg_db_data:

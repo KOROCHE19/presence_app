@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Promotions — Administration{% endblock %}
+
+{% block content %}
+<h1 style="font-size:22px; color:#2c3e50; margin-bottom:20px;">Gestion des promotions</h1>
+
+<div class="grid-2">
+    <div>
+        <div class="card">
+            <h2>Nouvelle classe</h2>
+            <form method="post">
+                <input type="hidden" name="action" value="creer_classe">
+                <div class="form-group">
+                    <label>Nom</label>
+                    <input name="nom" placeholder="ex: BTS SIO" required>
+                </div>
+                <div class="form-group">
+                    <label>Code</label>
+                    <input name="code" placeholder="ex: BTS-SIO" required>
+                </div>
+                <button class="btn btn-success" type="submit">Créer</button>
+            </form>
+            <table style="margin-top:15px;">
+                <thead><tr><th>Nom</th><th>Code</th></tr></thead>
+                <tbody>
+                {% for c in classes %}
+                    <tr><td>{{ c.nom }}</td><td><code>{{ c.code }}</code></td></tr>
+                {% else %}
+                    <tr><td colspan="2" style="color:#999">Aucune classe</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <h2>Nouvelle promotion</h2>
+            <form method="post">
+                <input type="hidden" name="action" value="creer_promo">
+                <div class="form-group">
+                    <label>Classe</label>
+                    <select name="classe_id" required>
+                        <option value="">-- choisir --</option>
+                        {% for c in classes %}
+                        <option value="{{ c.id }}">{{ c.nom }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Nom groupe</label>
+                    <input name="nom" placeholder="ex: Groupe A" required>
+                </div>
+                <div class="form-group">
+                    <label>Année scolaire</label>
+                    <input name="annee" placeholder="ex: 2025-2026" required>
+                </div>
+                <button class="btn btn-success" type="submit">Créer</button>
+            </form>
+            <table style="margin-top:15px;">
+                <thead><tr><th>Nom</th><th>Année</th><th>Classe</th><th>Étudiants</th></tr></thead>
+                <tbody>
+                {% for p in promotions %}
+                    <tr>
+                        <td>{{ p.nom }}</td>
+                        <td>{{ p.annee|default('') }}</td>
+                        <td>{{ p.classe_nom|default('') }}</td>
+                        <td>{{ p.nb_etudiants|default(0) }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="4" style="color:#999">Aucune promotion</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}{{ session.matiere }} — Gestion Présences{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <div>
+        <h1 style="font-size:22px; color:#2c3e50;">
+            {{ session.matiere }} —
+            {{ session.promotion_nom or ('Promo #' ~ session.promotion_id) }}
+        </h1>
+        <p style="color:#666; margin-top:5px; font-size:14px;">
+            {{ session.date }} •
+            {{ session.heure_debut }} - {{ session.heure_fin }} •
+            {% if session.statut == 'ouverte' %}
+                <span class="badge badge-success">Ouverte</span>
+            {% else %}
+                <span class="badge badge-info">Fermée</span>
+            {% endif %}
+        </p>
+    </div>
+    <div>
+        {% if session.statut == 'ouverte' %}
+        <a href="/sessions/{{ session.id }}/fermer"
+           class="btn btn-danger"
+           onclick="return confirm('Fermer cette session ? Les mails d\'absence seront envoyés.')">
+            Fermer la session
+        </a>
+        {% endif %}
+        <a href="/sessions" class="btn btn-secondary">Retour</a>
+    </div>
+</div>
+
+<div class="grid-2" style="margin-bottom:20px;">
+    <div class="stat-box">
+        <div class="number" style="color:#27ae60;">{{ session.nb_presents }}</div>
+        <div class="label">Présents</div>
+    </div>
+    <div class="stat-box">
+        <div class="number" style="color:#e74c3c;">{{ session.nb_absents }}</div>
+        <div class="label">Absents</div>
+    </div>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+    <table>
+        <thead>
+            <tr><th>Étudiant</th><th>Présence</th></tr>
+        </thead>
+        <tbody id="liste-presences">
+        {% for p in session.presences %}
+            {% if p.statut == 'present' %}
+                {% set row_bg = 'background:#f0fff4' %}
+            {% elif p.statut == 'absent' %}
+                {% set row_bg = 'background:#fff5f5' %}
+            {% elif p.statut == 'retard' %}
+                {% set row_bg = 'background:#fffbf0' %}
+            {% else %}
+                {% set row_bg = '' %}
+            {% endif %}
+            <tr style="{{ row_bg }}">
+                <td>{{ p.etudiant_prenom|default('') }} {{ p.etudiant_nom|default('') }}</td>
+                <td>
+                    {% if session.statut == 'ouverte' %}
+                    <select onchange="changerStatut({{ p.id }}, this.value)"
+                            style="padding:5px; border-radius:4px; border:1px solid #ced4da;">
+                        <option value="present"  {% if p.statut == 'present'  %}selected{% endif %}>✅ Présent</option>
+                        <option value="absent"   {% if p.statut == 'absent'   %}selected{% endif %}>❌ Absent</option>
+                        <option value="retard"   {% if p.statut == 'retard'   %}selected{% endif %}>⏰ Retard</option>
+                        <option value="excusé"   {% if p.statut == 'excusé'   %}selected{% endif %}>📝 Excusé</option>
+                    </select>
+                    {% else %}
+                        {% set badge_map = {'present': 'badge-success', 'absent': 'badge-danger', 'retard': 'badge-warning', 'excusé': 'badge-info'} %}
+                        <span class="badge {{ badge_map.get(p.statut, '') }}">{{ p.statut }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="2" style="text-align:center; padding:30px; color:#999;">
+                    Aucun étudiant dans cette session
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if session_data.statut == 'ouverte' %}
+<script>
+function changerStatut(presenceId, nouveauStatut) {
+    fetch('/api/presences/' + presenceId, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({statut: nouveauStatut})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) alert('Erreur : ' + data.error);
+    })
+    .catch(() => alert('Erreur réseau'));
+}
+</script>
+{% endif %}
+{% endblock %}

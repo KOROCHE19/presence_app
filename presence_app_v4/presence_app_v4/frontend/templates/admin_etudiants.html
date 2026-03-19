@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Étudiants — Administration{% endblock %}
+
+{% block content %}
+<h1 style="font-size:22px; color:#2c3e50; margin-bottom:20px;">Gestion des étudiants</h1>
+
+{% if msg_import %}
+<div class="alert alert-success">{{ msg_import }}</div>
+{% endif %}
+
+{# ── sélecteur de promotion ── #}
+<div class="card" style="padding:15px 25px;">
+    <form method="get" style="display:flex; align-items:center; gap:12px;">
+        <label style="font-weight:bold; white-space:nowrap;">Promotion :</label>
+        <select name="promotion_id"
+                style="flex:1; padding:8px; border:1px solid #ced4da; border-radius:5px; font-size:14px;">
+            <option value="">-- choisir --</option>
+            {% for p in promotions %}
+            <option value="{{ p.id }}" {% if p.id|string == promo_filtre %}selected{% endif %}>
+                {{ p.nom }} — {{ p.annee|default('') }} ({{ p.nb_etudiants|default(0) }} ét.)
+            </option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-primary" type="submit">Voir</button>
+    </form>
+</div>
+
+{% if promo_filtre %}
+<div class="grid-2">
+
+    {# ── ajout manuel ── #}
+    <div class="card">
+        <h2>Ajouter un étudiant</h2>
+        <form method="post">
+            <input type="hidden" name="action" value="ajouter">
+            <input type="hidden" name="promotion_id" value="{{ promo_filtre }}">
+            <div class="form-group"><label>Nom</label><input name="nom" required></div>
+            <div class="form-group"><label>Prénom</label><input name="prenom" required></div>
+            <div class="form-group"><label>Email</label><input type="email" name="email" required></div>
+            <div class="form-group">
+                <label>N° étudiant <span style="color:#999; font-weight:normal">(optionnel)</span></label>
+                <input name="numero_etudiant">
+            </div>
+            <button class="btn btn-success" type="submit">Ajouter</button>
+        </form>
+    </div>
+
+    {# ── import CSV ── #}
+    <div class="card">
+        <h2>Import CSV / Excel</h2>
+        <p style="font-size:13px; color:#666; margin-bottom:12px;">
+            Une ligne par étudiant, colonnes séparées par <code>,</code> ou <code>;</code><br>
+            Format : <code>nom, prenom, email, numero_etudiant</code>
+        </p>
+        <div style="background:#f8f9fa; border-radius:5px; padding:12px;
+                    font-family:monospace; font-size:12px; margin-bottom:15px; color:#555;">
+            Dupont;Jean;jean.dupont@email.fr;E001<br>
+            Martin;Sophie;sophie.martin@email.fr;E002<br>
+            Bernard;Lucas;lucas.b@email.fr;
+        </div>
+        <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="import_csv">
+            <input type="hidden" name="promotion_id" value="{{ promo_filtre }}">
+            <div class="form-group">
+                <label>Fichier CSV ou Excel (.csv, .xlsx)</label>
+                <input type="file" name="fichier_csv" accept=".csv,.txt,.xlsx,.xls" required
+                       style="padding:6px; border:1px solid #ced4da; border-radius:5px; width:100%;">
+            </div>
+            <button class="btn btn-primary" type="submit">Importer</button>
+        </form>
+    </div>
+</div>
+
+{# ── liste des étudiants avec pagination ── #}
+<div class="card" style="padding:0; overflow:hidden;">
+    <div style="padding:15px 20px; border-bottom:1px solid #eee;
+                display:flex; justify-content:space-between; align-items:center;">
+        <strong>{{ total }} étudiant{% if total > 1 %}s{% endif %} dans cette promotion</strong>
+    </div>
+    <table>
+        <thead>
+            <tr><th>N°</th><th>Nom complet</th><th>Email</th></tr>
+        </thead>
+        <tbody>
+        {% for e in etudiants %}
+            <tr>
+                <td>{{ e.numero_etudiant or '—' }}</td>
+                <td>{{ e.prenom }} {{ e.nom }}</td>
+                <td style="color:#666; font-size:13px;">{{ e.email }}</td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="3" style="text-align:center; padding:25px; color:#999;">
+                    Aucun étudiant dans cette promotion
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# ── AMÉLIORATION 3 : pagination étudiants ── #}
+{% if pages > 1 %}
+<div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:12px;">
+    <div class="pagination">
+        {% if has_prev %}
+            <a href="?promotion_id={{ promo_filtre }}&page={{ page - 1 }}">‹ Préc.</a>
+        {% else %}
+            <span class="disabled">‹ Préc.</span>
+        {% endif %}
+
+        {% for num in range(1, pages + 1) %}
+            {% if num == page %}
+                <span class="active">{{ num }}</span>
+            {% elif num == 1 or num == pages or (num >= page - 2 and num <= page + 2) %}
+                <a href="?promotion_id={{ promo_filtre }}&page={{ num }}">{{ num }}</a>
+            {% elif num == page - 3 or num == page + 3 %}
+                <span class="disabled">…</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if has_next %}
+            <a href="?promotion_id={{ promo_filtre }}&page={{ page + 1 }}">Suiv. ›</a>
+        {% else %}
+            <span class="disabled">Suiv. ›</span>
+        {% endif %}
+    </div>
+    <span class="pagination-info">
+        Page {{ page }}/{{ pages }}
+        ({{ per_page }} par page)
+    </span>
+</div>
+{% endif %}
+
+{% endif %}{# fin if promo_filtre #}
+{% endblock %}
