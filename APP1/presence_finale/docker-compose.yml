@@ -1,0 +1,133 @@
+# docker-compose.yml - Orchestration des 7 conteneurs de l'application
+#
+# Ordre de demarrage garanti par depends_on + healthcheck :
+# les services applicatifs attendent que leurs bases de donnees soient
+# vraiment prets (pg_isready OK) avant de demarrer. Pas de sleep arbitraire.
+#
+# Commande : docker compose up --build
+
+services:
+
+  # Base PostgreSQL dediee a l'authentification.
+  # Le healthcheck permet aux services qui en dependent d'attendre
+  # que PostgreSQL soit vraiment operationnel, pas juste demarre.
+  auth_db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB:       ${AUTH_DB_NAME}
+      POSTGRES_USER:     ${AUTH_DB_USER}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASS}
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER} -d ${AUTH_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Base PostgreSQL pour le planning (cours, promotions, etudiants).
+  planning_db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB:       ${PLANNING_DB_NAME}
+      POSTGRES_USER:     ${PLANNING_DB_USER}
+      POSTGRES_PASSWORD: ${PLANNING_DB_PASS}
+    volumes:
+      - planning_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PLANNING_DB_USER} -d ${PLANNING_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Base PostgreSQL pour l'emargement et les logs de notifications.
+  emarg_db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB:       ${EMARG_DB_NAME}
+      POSTGRES_USER:     ${EMARG_DB_USER}
+      POSTGRES_PASSWORD: ${EMARG_DB_PASS}
+    volumes:
+      - emarg_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EMARG_DB_USER} -d ${EMARG_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Service d'authentification JWT.
+  # Ne demarre qu'une fois auth_db healthy.
+  auth_service:
+    build: ./auth_service
+    environment:
+      DATABASE_URL: postgresql://${AUTH_DB_USER}:${AUTH_DB_PASS}@auth_db:5432/${AUTH_DB_NAME}
+      SECRET_KEY:   ${SECRET_KEY}
+    ports:
+      - "5001:5001"
+    depends_on:
+      auth_db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Service planning - gestionnaire des cours et des etudiants.
+  planning_service:
+    build: ./planning_service
+    environment:
+      DATABASE_URL: postgresql://${PLANNING_DB_USER}:${PLANNING_DB_PASS}@planning_db:5432/${PLANNING_DB_NAME}
+      SECRET_KEY:   ${SECRET_KEY}
+    ports:
+      - "5002:5002"
+    depends_on:
+      planning_db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Service emargement - feuilles de presence + pipeline SMTP asynchrone.
+  # Depend du service planning pour recuperer la liste des etudiants
+  # lors de la creation d'une session.
+  emargement_service:
+    build: ./emargement_service
+    environment:
+      DATABASE_URL:         postgresql://${EMARG_DB_USER}:${EMARG_DB_PASS}@emarg_db:5432/${EMARG_DB_NAME}
+      SECRET_KEY:           ${SECRET_KEY}
+      PLANNING_SERVICE_URL: http://planning_service:5002
+      MAIL_SERVER:          ${MAIL_SERVER}
+      MAIL_PORT:            ${MAIL_PORT}
+      MAIL_USERNAME:        ${MAIL_USERNAME}
+      MAIL_PASSWORD:        ${MAIL_PASSWORD}
+      MAIL_SENDER:          ${MAIL_SENDER}
+    ports:
+      - "5003:5003"
+    depends_on:
+      emarg_db:
+        condition: service_healthy
+      planning_service:
+        condition: service_started
+    restart: unless-stopped
+
+  # Frontend - interface web Jinja2, relais vers les APIs.
+  # Expose uniquement sur le port 5000 (point d'entree utilisateur).
+  frontend_service:
+    build: ./frontend_service
+    environment:
+      SECRET_KEY:            ${SECRET_KEY}
+      AUTH_SERVICE_URL:      http://auth_service:5001
+      PLANNING_SERVICE_URL:  http://planning_service:5002
+      EMARG_SERVICE_URL:     http://emargement_service:5003
+    ports:
+      - "5000:5000"
+    depends_on:
+      auth_service:
+        condition: service_started
+      planning_service:
+        condition: service_started
+      emargement_service:
+        condition: service_started
+    restart: unless-stopped
+
+# Volumes nommes : les donnees survivent aux arrets et aux rebuilds.
+# Si on supprime l'application (docker compose down -v), les volumes sont effaces.
+volumes:
+  auth_db_data:
+  planning_db_data:
+  emarg_db_data:
